@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyLapse - タイムラプス学習記録SNS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans select-none">
+
+  <!-- ヘッダー -->
+  <header class="bg-gray-800/90 backdrop-blur-md border-b border-gray-700 p-4 sticky top-0 z-40 max-w-2xl mx-auto w-full flex justify-between items-center">
+    <h1 class="text-xl font-black tracking-wider text-indigo-400 flex items-center gap-2">
+      <i class="fa-solid fa-bolt text-yellow-400"></i>StudyLapse
+    </h1>
+    <div class="flex items-center gap-2">
+      <div class="text-xs bg-indigo-950 border border-indigo-700/50 text-indigo-300 px-3 py-1.5 rounded-full font-medium">
+        🔥 今日の合計: <span id="today-total-min" class="font-bold text-white">0</span> 分
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="flex-1 max-w-2xl mx-auto w-full p-4 pb-24">
+
+    <!-- TAB 1: 学習＆タイムラプス撮影 -->
+    <section id="tab-study" class="tab-content space-y-5">
+      
+      <!-- カメラプレビュー -->
+      <div class="relative bg-black rounded-2xl overflow-hidden aspect-video shadow-2xl border border-gray-800">
+        <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover"></video>
+        <canvas id="offscreen-canvas" class="hidden"></canvas>
+        
+        <!-- 録画中ステータス -->
+        <div id="recording-badge" class="hidden absolute top-4 left-4 bg-red-600/90 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider flex items-center gap-2 backdrop-blur-md animate-pulse">
+          <span class="w-2.5 h-2.5 rounded-full bg-white"></span> REC (TIMELAPSE)
+        </div>
+
+        <!-- 記録フレーム数カウンター -->
+        <div id="frame-counter" class="hidden absolute top-4 right-4 bg-black/60 text-gray-300 px-3 py-1 rounded-full text-xs font-mono backdrop-blur-md">
+          コマ数: <span id="captured-count" class="text-white font-bold">0</span>
+        </div>
+      </div>
+
+      <!-- 詳細学習設定 & タイマーパネル -->
+      <div class="bg-gray-800 rounded-2xl p-5 border border-gray-700 space-y-4">
+        
+        <!-- モード切替 & タイマー表示 -->
+        <div class="text-center space-y-1">
+          <div class="flex justify-center gap-2 mb-2">
+            <button id="mode-stopwatch" onclick="setTimerMode('stopwatch')" class="text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-semibold transition">ストップウォッチ</button>
+            <button id="mode-pomodoro" onclick="setTimerMode('pomodoro')" class="text-xs px-3 py-1 rounded-full bg-gray-700 text-gray-400 font-semibold transition">ポモドーロ (25分)</button>
+          </div>
+          <div id="timer-display" class="text-5xl font-black font-mono tracking-tight text-indigo-400">00:00:00</div>
+        </div>
+
+        <!-- 詳細入力エリア -->
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">具体タスク・目標 <span class="text-red-400">*</span></label>
+            <input type="text" id="task-name" placeholder="例: 英単語帳 P.40〜60 / Python配列操作" class="w-full bg-gray-700/80 border border-gray-600 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1">科目</label>
+              <select id="subject-select" class="w-full bg-gray-700/80 border border-gray-600 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="💻 プログラミング">💻 プログラミング</option>
+                <option value="🌐 英語・語学">🌐 英語・語学</option>
+                <option value="📚 資格・検定">📚 資格・検定</option>
+                <option value="🧪 数学・理科">🧪 数学・理科</option>
+                <option value="📖 読書・その他">📖 読書・その他</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1">撮影間隔 (タイムラプス)</label>
+              <select id="interval-select" class="w-full bg-gray-700/80 border border-gray-600 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="1000">1秒ごと (超高速)</option>
+                <option value="2000" selected>2秒ごと (標準)</option>
+                <option value="5000">5秒ごと (じっくり)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作ボタン -->
+        <div class="pt-2">
+          <button id="start-btn" onclick="startStudy()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg flex justify-center items-center gap-2">
+            <i class="fa-solid fa-play"></i> 学習＆タイムラプス開始
+          </button>
+          
+          <div id="active-controls" class="hidden flex gap-3">
+            <button id="pause-btn" onclick="togglePause()" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg flex justify-center items-center gap-2">
+              <i class="fa-solid fa-pause"></i> 一時停止
+            </button>
+            <button id="stop-btn" onclick="stopStudy()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg flex justify-center items-center gap-2">
+              <i class="fa-solid fa-square"></i> 終了＆保存
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: SNSフィード -->
+    <section id="tab-feed" class="tab-content space-y-5 hidden">
+      <div id="feed-container" class="space-y-5"></div>
+    </section>
+
+    <!-- TAB 3: 詳細学習ログ＆分析 -->
+    <section id="tab-stats" class="tab-content space-y-5 hidden">
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center">
+          <p class="text-xs text-gray-400">総学習時間</p>
+          <p id="stat-total-time" class="text-lg font-bold text-indigo-400 mt-1">0分</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center">
+          <p class="text-xs text-gray-400">完了タスク</p>
+          <p id="stat-task-count" class="text-lg font-bold text-emerald-400 mt-1">0個</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center">
+          <p class="text-xs text-gray-400">平均集中度</p>
+          <p id="stat-avg-focus" class="text-lg font-bold text-yellow-400 mt-1">★0.0</p>
+        </div>
+      </div>
+
+      <div class="bg-gray-800 rounded-2xl p-5 border border-gray-700">
+        <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-indigo-400"></i> 科目別時間内訳
+        </h3>
+        <div id="stats-subject-list" class="space-y-3"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- タイムラプス動画生成中ローダーモーダル -->
+  <div id="loader-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4">
+    <div class="animate-spin rounded-full h-14 w-14 border-4 border-indigo-500 border-t-transparent mb-4"></div>
+    <h3 class="text-lg font-bold text-white">タイムラプス動画を生成中...</h3>
+    <p class="text-xs text-gray-400 mt-2">コマ画像を高速合成して短尺動画を作成しています</p>
+  </div>
+
+  <!-- 投稿作成モーダル -->
+  <div id="post-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-2xl p-5 border border-gray-700 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <i class="fa-solid fa-share-nodes text-indigo-400"></i> 学習ログの投稿
+      </h3>
+
+      <!-- タイムラプス動画プレビュー -->
+      <div class="aspect-video bg-black rounded-xl overflow-hidden border border-gray-700 relative">
+        <video id="preview-video" controls autoplay loop muted class="w-full h-full object-cover"></video>
+        <span class="absolute bottom-2 right-2 bg-black/70 text-indigo-300 text-[10px] px-2 py-0.5 rounded font-mono">TIMELAPSE</span>
+      </div>
+
+      <!-- 学習概要 -->
+      <div class="bg-gray-700/50 p-3 rounded-xl space-y-1 text-xs">
+        <p class="text-gray-300"><span class="font-bold text-white">タスク:</span> <span id="modal-task-title"></span></p>
+        <p class="text-gray-300"><span class="font-bold text-white">科目 / 時間:</span> <span id="modal-subject-time"></span></p>
+      </div>
+
+      <!-- 集中度（自己評価） -->
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1">集中度・満足度</label>
+        <div class="flex gap-2 text-2xl text-yellow-400 cursor-pointer" id="star-rating">
+          <i class="fa-solid fa-star" data-rating="1"></i>
+          <i class="fa-solid fa-star" data-rating="2"></i>
+          <i class="fa-solid fa-star" data-rating="3"></i>
+          <i class="fa-solid fa-star" data-rating="4"></i>
+          <i class="fa-solid fa-star" data-rating="5"></i>
+        </div>
+      </div>
+
+      <!-- メモ・コメント -->
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1">振り返り・気付きメモ</label>
+        <textarea id="post-comment" rows="3" placeholder="覚えた単語数や集中できたポイントなどを記録..." class="w-full bg-gray-700 border border-gray-600 rounded-xl p-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="closePostModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-xl transition">破棄</button>
+        <button id="submit-post-btn" onclick="submitPost()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition">SNSにシェア</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ナビゲーションバー -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-gray-800/95 border-t border-gray-700 max-w-2xl mx-auto z-40">
+    <div class="flex justify-around items-center h-16">
+      <button onclick="switchTab('study')" class="nav-btn text-indigo-400 flex flex-col items-center gap-1">
+        <i class="fa-solid fa-video text-lg"></i>
+        <span class="text-[11px]">記録</span>
+      </button>
+      <button onclick="switchTab('feed')" class="nav-btn text-gray-400 hover:text-indigo-400 flex flex-col items-center gap-1">
+        <i class="fa-solid fa-compass text-lg"></i>
+        <span class="text-[11px]">フィード</span>
+      </button>
+      <button onclick="switchTab('stats')" class="nav-btn text-gray-400 hover:text-indigo-400 flex flex-col items-center gap-1">
+        <i class="fa-solid fa-chart-pie text-lg"></i>
+        <span class="text-[11px]">分析</span>
+      </button>
+    </div>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
